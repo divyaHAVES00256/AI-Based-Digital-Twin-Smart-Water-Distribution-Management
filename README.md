@@ -22,7 +22,7 @@ Instead of a standalone Artificial Neural Network (ANN), we implemented a **Hybr
 ## 📂 Repository Structure & Handoff
 
 ```text
-ANN-DIGITAL-TWIN/
+ANN-DIGITAL-WATER-TWIN/
 │
 ├── data/                                 
 │   ├── data.ipynb                        # Synthetic data generation logic
@@ -37,7 +37,8 @@ ANN-DIGITAL-TWIN/
 │
 └── test/                                 
     └── predict.ipynb                     # Real-time inference & Leak Detection API
-
+```
+---
 
 ## 📊 Data Visualization & Insights Analysis
 
