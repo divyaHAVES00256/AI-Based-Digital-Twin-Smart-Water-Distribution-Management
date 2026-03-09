@@ -48,7 +48,7 @@ This section provides a visual deep-dive into how the AI interprets water distri
 ### 1. Exploratory Data Analysis (EDA): The Daily "Heartbeat"
 Before training the ANN, we visualized the raw demand data. The plot below represents a 7-day snapshot of the water system's behavior.
 
-![Project Screenshot](./images/output.png)
+![Project Screenshot](./images/demand.png)
 
 ![Project Screenshot](./images/output2.png)
 
