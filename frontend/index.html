@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Digital Twin — Smart Water Distribution</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --bg2:       #161b22;
+    --bg3:       #21262d;
+    --border:    rgba(255,255,255,0.08);
+    --border2:   rgba(255,255,255,0.15);
+    --text:      #e6edf3;
+    --text2:     #8b949e;
+    --text3:     #6e7681;
+    --green:     #1a7f4e;
+    --green-l:   #3fb87f;
+    --green-dim: rgba(63,184,127,0.12);
+    --blue:      #1f6feb;
+    --blue-l:    #58a6ff;
+    --blue-dim:  rgba(88,166,255,0.12);
+    --amber:     #9e6a03;
+    --amber-l:   #e3b341;
+    --amber-dim: rgba(227,179,65,0.12);
+    --red:       #b62324;
+    --red-l:     #f85149;
+    --red-dim:   rgba(248,81,73,0.12);
+    --purple:    #6e40c9;
+    --purple-l:  #a371f7;
+    --purple-dim:rgba(163,113,247,0.12);
+    --radius:    8px;
+    --radius-lg: 12px;
+    --font-sans: 'IBM Plex Sans', sans-serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* Layout */
+  .app { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
+
+  .topbar {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; }
+  .topbar-logo {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--green-l), var(--blue-l));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .topbar-title { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--text); }
+  .topbar-sub   { font-size: 12px; color: var(--text3); margin-left: 6px; }
+
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--red-l); display: inline-block; margin-right: 6px;
+    transition: background 0.3s;
+  }
+  .status-dot.connected { background: var(--green-l); }
+  #status-text { font-size: 12px; color: var(--text2); font-family: var(--font-mono); }
+
+  .main { display: grid; grid-template-columns: 300px 1fr; height: calc(100vh - 56px); overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* Scenario cards */
+  .scenario-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .scenario-btn {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg3);
+    color: var(--text2);
+    padding: 10px 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    font-family: var(--font-sans);
+    font-size: 11px;
+  }
+  .scenario-btn:hover { border-color: var(--border2); color: var(--text); }
+  .scenario-btn .icon { font-size: 18px; margin-bottom: 4px; display: block; }
+  .scenario-btn.active-normal  { border-color: var(--green-l);  background: var(--green-dim);  color: var(--green-l);  }
+  .scenario-btn.active-high_demand { border-color: var(--amber-l); background: var(--amber-dim); color: var(--amber-l); }
+  .scenario-btn.active-pump_failure { border-color: var(--red-l);  background: var(--red-dim);   color: var(--red-l);   }
+  .scenario-btn.active-demand_spike { border-color: var(--purple-l);background: var(--purple-dim);color: var(--purple-l);}
+
+  /* Sliders */
+  .param-row { margin-bottom: 14px; }
+  .param-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .param-label { font-size: 12px; color: var(--text2); }
+  .param-value { font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--text); }
+  input[type=range] {
+    width: 100%; height: 4px; appearance: none;
+    background: var(--bg3); border-radius: 2px; outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    appearance: none; width: 14px; height: 14px;
+    border-radius: 50%; background: var(--blue-l); cursor: pointer;
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+  input[type=range].green::-webkit-slider-thumb { background: var(--green-l); }
+  input[type=range].amber::-webkit-slider-thumb  { background: var(--amber-l); }
+  input[type=range].red::-webkit-slider-thumb    { background: var(--red-l); }
+  input[type=range].purple::-webkit-slider-thumb { background: var(--purple-l); }
+
+  /* Run button */
+  .run-btn {
+    width: 100%; padding: 11px;
+    background: var(--blue-l); color: #000;
+    border: none; border-radius: var(--radius);
+    font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; position: relative; overflow: hidden;
+  }
+  .run-btn:hover { background: #79b8ff; }
+  .run-btn:active { transform: scale(0.98); }
+  .run-btn:disabled { background: var(--bg3); color: var(--text3); cursor: not-allowed; transform: none; }
+
+  .spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid rgba(0,0,0,0.3); border-top-color: #000;
+    border-radius: 50%; animation: spin 0.6s linear infinite;
+    margin-right: 6px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Content area */
+  .content {
+    overflow-y: auto;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Stat cards */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  }
+  .stat-card.green::before  { background: var(--green-l); }
+  .stat-card.blue::before   { background: var(--blue-l); }
+  .stat-card.amber::before  { background: var(--amber-l); }
+  .stat-card.red::before    { background: var(--red-l); }
+  .stat-label { font-size: 11px; color: var(--text3); margin-bottom: 6px; font-family: var(--font-mono); }
+  .stat-value { font-size: 24px; font-weight: 600; font-family: var(--font-mono); line-height: 1; }
+  .stat-value.green  { color: var(--green-l); }
+  .stat-value.blue   { color: var(--blue-l); }
+  .stat-value.amber  { color: var(--amber-l); }
+  .stat-value.red    { color: var(--red-l); }
+  .stat-unit { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  /* Chart cards */
+  .chart-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+  }
+  .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .chart-title { font-size: 13px; font-weight: 500; color: var(--text); font-family: var(--font-mono); }
+  .chart-badge {
+    font-size: 10px; font-family: var(--font-mono);
+    padding: 2px 8px; border-radius: 4px; border: 1px solid;
+  }
+  .chart-badge.green  { color: var(--green-l);  border-color: var(--green);  background: var(--green-dim); }
+  .chart-badge.blue   { color: var(--blue-l);   border-color: var(--blue);   background: var(--blue-dim); }
+  .chart-badge.amber  { color: var(--amber-l);  border-color: var(--amber);  background: var(--amber-dim); }
+
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+  /* Alerts */
+  .alerts-area { display: flex; flex-direction: column; gap: 6px; }
+  .alert-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-radius: var(--radius); font-size: 12px;
+  }
+  .alert-pill.danger  { background: var(--red-dim);   border: 1px solid var(--red);   color: var(--red-l); }
+  .alert-pill.warning { background: var(--amber-dim); border: 1px solid var(--amber); color: var(--amber-l); }
+  .alert-pill.success { background: var(--green-dim); border: 1px solid var(--green); color: var(--green-l); }
+  .alert-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+
+  /* Empty state */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 60px 20px; text-align: center; gap: 12px;
+  }
+  .empty-state .big-icon { font-size: 48px; opacity: 0.3; }
+  .empty-state p { color: var(--text3); font-size: 13px; line-height: 1.6; max-width: 280px; }
+
+  /* Error banner */
+  .error-banner {
+    background: var(--red-dim); border: 1px solid var(--red);
+    border-radius: var(--radius); padding: 10px 14px;
+    color: var(--red-l); font-size: 12px; font-family: var(--font-mono);
+    display: none;
+  }
+  .error-banner.visible { display: block; }
+
+  /* Playback bar */
+  .playback-bar {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .play-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--bg3); border: 1px solid var(--border2);
+    color: var(--text); cursor: pointer; font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.15s;
+  }
+  .play-btn:hover { background: var(--blue-dim); border-color: var(--blue-l); }
+  .play-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  #scrubber { flex: 1; }
+  #scrubber::-webkit-slider-thumb { background: var(--blue-l); }
+  .step-label { font-family: var(--font-mono); font-size: 11px; color: var(--text2); min-width: 80px; text-align: right; }
+
+  /* Scenario info bar */
+  .scenario-info {
+    padding: 10px 14px; border-radius: var(--radius);
+    border-left: 3px solid; font-size: 12px; color: var(--text2); line-height: 1.5;
+  }
+  .scenario-info.normal       { border-color: var(--green-l); background: var(--green-dim); }
+  .scenario-info.high_demand  { border-color: var(--amber-l); background: var(--amber-dim); }
+  .scenario-info.pump_failure { border-color: var(--red-l);   background: var(--red-dim); }
+  .scenario-info.demand_spike { border-color: var(--purple-l);background: var(--purple-dim); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    .sidebar { height: auto; overflow: visible; }
+    .stat-row { grid-template-columns: 1fr 1fr; }
+    .chart-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo">💧</div>
+      <span class="topbar-title">digital-twin</span>
+      <span class="topbar-sub">Smart Water Distribution</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">connecting…</span>
+    </div>
+  </header>
+
+  <div class="main">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+
+      <div>
+        <div class="section-label">Scenario</div>
+        <div class="scenario-grid">
+          <button class="scenario-btn active-normal" data-scenario="normal" onclick="selectScenario(this)">
+            <span class="icon">🌊</span>Normal
+          </button>
+          <button class="scenario-btn" data-scenario="high_demand" onclick="selectScenario(this)">
+            <span class="icon">📈</span>High Demand
+          </button>
+          <button class="scenario-btn" data-scenario="pump_failure" onclick="selectScenario(this)">
+            <span class="icon">⚠️</span>Pump Failure
+          </button>
+          <button class="scenario-btn" data-scenario="demand_spike" onclick="selectScenario(this)">
+            <span class="icon">⚡</span>Demand Spike
+          </button>
+        </div>
+        <div id="scenario-info" class="scenario-info normal" style="margin-top:10px;">
+          Baseline ANN predictions with standard adaptive pump control.
+        </div>
+      </div>
+
+      <div>
+        <div class="section-label">Parameters</div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-label">Initial Tank Level</span>
+            <span class="param-value" id="v-tank">50 m³</span>
+          </div>
+          <input type="range" class="green" id="tank_initial" min="0" max="100" step="1" value="50"
+            oninput="document.getElementById('v-tank').textContent=this.value+' m³'">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-label">Pump Rate</span>
+            <span class="param-value" id="v-pump">60 L/s</span>
+          </div>
+          <input type="range" class="blue" id="pump_input" min="10" max="100" step="1" value="60"
+            oninput="document.getElementById('v-pump').textContent=this.value+' L/s'">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-label">Tank Capacity</span>
+            <span class="param-value" id="v-max">100 m³</span>
+          </div>
+          <input type="range" class="purple" id="tank_max" min="50" max="200" step="5" value="100"
+            oninput="document.getElementById('v-max').textContent=this.value+' m³'">
+        </div>
+
+        <div class="param-row">
+          <div class="param-header">
+            <span class="param-label">Leak Probability</span>
+            <span class="param-value" id="v-leak">0.00</span>
+          </div>
+          <input type="range" class="red" id="leak_probability" min="0" max="1" step="0.01" value="0"
+            oninput="document.getElementById('v-leak').textContent=parseFloat(this.value).toFixed(2)">
+        </div>
+      </div>
+
+      <div>
+        <div id="error-banner" class="error-banner"></div>
+        <button class="run-btn" id="run-btn" onclick="runSimulation()">
+          ▶ Run Simulation
+        </button>
+      </div>
+
+      <div>
+        <div class="section-label">ANN Model</div>
+        <div style="background:var(--bg3);border-radius:var(--radius);padding:10px 12px;font-family:var(--font-mono);font-size:11px;color:var(--text2);line-height:1.8;">
+          <div>Model: <span style="color:var(--text)">ANN Feed-forward</span></div>
+          <div>Inputs: <span style="color:var(--text)">2500 timesteps</span></div>
+          <div>Output: <span style="color:var(--text)">predicted_demand</span></div>
+          <div>Backend: <span style="color:var(--green-l)">Flask · localhost:5000</span></div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Main content -->
+    <main class="content" id="content">
+      <div class="empty-state" id="empty-state">
+        <div class="big-icon">🌐</div>
+        <p>Configure parameters on the left and click <strong>Run Simulation</strong> to start the digital twin.</p>
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:5000';
+let simData = null;
+let charts = {};
+let playInterval = null;
+let currentScenario = 'normal';
+let isPlaying = false;
+
+const scenarioInfo = {
+  normal:       'Baseline ANN predictions with standard adaptive pump control.',
+  high_demand:  'Demand amplified ×1.3 — tests system under sustained high load.',
+  pump_failure: 'Pump capped at 20 L/s — tank depletion risk. Watch tank levels drop.',
+  demand_spike: 'Sudden ×1.8 spike injected at steps 800–850. Pressure response visible.',
+};
+
+// ── Connection check ──────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/api/health`, { signal: AbortSignal.timeout(2000) });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      document.getElementById('status-dot').className = 'status-dot connected';
+      document.getElementById('status-text').textContent = `API connected · ${d.demands_loaded} demand points`;
+    }
+  } catch {
+    document.getElementById('status-dot').className = 'status-dot';
+    document.getElementById('status-text').textContent = 'API offline — start backend first';
+  }
+}
+
+function selectScenario(btn) {
+  document.querySelectorAll('.scenario-btn').forEach(b => b.className = 'scenario-btn');
+  const s = btn.dataset.scenario;
+  btn.className = `scenario-btn active-${s}`;
+  currentScenario = s;
+  document.getElementById('scenario-info').className = `scenario-info ${s}`;
+  document.getElementById('scenario-info').textContent = scenarioInfo[s];
+}
+
+// ── Run simulation ────────────────────────────────────────────────────────
+async function runSimulation() {
+  const btn = document.getElementById('run-btn');
+  const err = document.getElementById('error-banner');
+  err.className = 'error-banner';
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Running…';
+
+  const payload = {
+    scenario:          currentScenario,
+    tank_initial:      parseFloat(document.getElementById('tank_initial').value),
+    pump_input:        parseFloat(document.getElementById('pump_input').value),
+    leak_probability:  parseFloat(document.getElementById('leak_probability').value),
+    tank_max:          parseFloat(document.getElementById('tank_max').value),
+  };
+
+  try {
+    const res = await fetch(`${API}/api/simulate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Simulation failed');
+
+    simData = data;
+    renderDashboard(data, payload);
+
+  } catch (e) {
+    err.className = 'error-banner visible';
+    err.textContent = `Error: ${e.message}. Make sure backend is running: python app.py`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ Run Simulation';
+  }
+}
+
+// ── Render dashboard ──────────────────────────────────────────────────────
+function renderDashboard(data, params) {
+  const content = document.getElementById('content');
+  document.getElementById('empty-state')?.remove();
+
+  const s = data.summary;
+  const alertColor = s.alert_count > 0 ? 'red' : 'green';
+  const alertVal   = s.alert_count > 0 ? s.alert_count : '✓';
+  const minColor   = s.min_tank < 10 ? 'red' : s.min_tank < 30 ? 'amber' : 'green';
+
+  content.innerHTML = `
+    <!-- Stat cards -->
+    <div class="stat-row" id="stat-row">
+      <div class="stat-card green">
+        <div class="stat-label">AVG TANK LEVEL</div>
+        <div class="stat-value green">${s.avg_tank}</div>
+        <div class="stat-unit">m³ average</div>
+      </div>
+      <div class="stat-card ${minColor}">
+        <div class="stat-label">MIN TANK LEVEL</div>
+        <div class="stat-value ${minColor}">${s.min_tank}</div>
+        <div class="stat-unit">m³ minimum</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-label">MAX PRESSURE</div>
+        <div class="stat-value blue">${s.max_pressure}</div>
+        <div class="stat-unit">bar peak</div>
+      </div>
+      <div class="stat-card ${alertColor}">
+        <div class="stat-label">ALERTS</div>
+        <div class="stat-value ${alertColor}">${alertVal}</div>
+        <div class="stat-unit">${s.alert_count > 0 ? 'events detected' : 'all nominal'}</div>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    <div class="alerts-area" id="alerts-area"></div>
+
+    <!-- Playback bar -->
+    <div class="playback-bar">
+      <button class="play-btn" id="play-btn" onclick="togglePlay()">▶</button>
+      <input type="range" id="scrubber" min="0" max="${data.tank_levels.length - 1}" value="${data.tank_levels.length - 1}"
+        oninput="scrubTo(parseInt(this.value))">
+      <span class="step-label" id="step-label">t = ${data.tank_levels.length}</span>
+    </div>
+
+    <!-- Charts row 1 -->
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Tank Level</span>
+          <span class="chart-badge green">m³</span>
+        </div>
+        <div style="position:relative;height:200px;"><canvas id="chart-tank"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Pressure</span>
+          <span class="chart-badge blue">bar</span>
+        </div>
+        <div style="position:relative;height:200px;"><canvas id="chart-pressure"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Demand (ANN Predicted)</span>
+          <span class="chart-badge amber">L/s</span>
+        </div>
+        <div style="position:relative;height:200px;"><canvas id="chart-demand"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <span class="chart-title">Leak Loss</span>
+          <span class="chart-badge" style="color:var(--red-l);border-color:var(--red);background:var(--red-dim)">L/s</span>
+        </div>
+        <div style="position:relative;height:200px;"><canvas id="chart-leak"></canvas></div>
+      </div>
+    </div>
+  `;
+
+  // Render alerts
+  const alertBox = document.getElementById('alerts-area');
+  if (data.alerts.length === 0) {
+    alertBox.innerHTML = `<div class="alert-pill success"><span class="alert-dot"></span>All systems nominal — no alerts triggered across ${s.total_steps} timesteps</div>`;
+  } else {
+    data.alerts.forEach(a => {
+      alertBox.innerHTML += `<div class="alert-pill ${a.type}"><span class="alert-dot"></span>${a.message} detected at step ${a.step}</div>`;
+    });
+  }
+
+  // Build charts
+  destroyCharts();
+  buildChart('chart-tank',     data.tank_levels, 'Tank Level',     '#3fb87f', 'rgba(63,184,127,0.15)');
+  buildChart('chart-pressure', data.pressures,   'Pressure',       '#58a6ff', 'rgba(88,166,255,0.15)');
+  buildChart('chart-demand',   data.demands,     'Demand',         '#e3b341', 'rgba(227,179,65,0.15)');
+  buildChart('chart-leak',     data.leak_losses, 'Leak Loss',      '#f85149', 'rgba(248,81,73,0.15)');
+}
+
+function buildChart(id, fullData, label, color, fillColor) {
+  const ctx = document.getElementById(id)?.getContext('2d');
+  if (!ctx) return;
+
+  // Downsample for performance if > 500 points
+  const step = Math.max(1, Math.floor(fullData.length / 500));
+  const labels = [], data = [];
+  for (let i = 0; i < fullData.length; i += step) {
+    labels.push(i);
+    data.push(fullData[i]);
+  }
+
+  charts[id] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data,
+        borderColor: color,
+        backgroundColor: fillColor,
+        borderWidth: 1.5,
+        fill: true,
+        pointRadius: 0,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#161b22',
+          borderColor: 'rgba(255,255,255,0.1)',
+          borderWidth: 1,
+          titleColor: '#8b949e',
+          bodyColor: color,
+          titleFont: { family: 'IBM Plex Mono', size: 11 },
+          bodyFont:  { family: 'IBM Plex Mono', size: 12 },
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#6e7681', font: { family: 'IBM Plex Mono', size: 10 }, maxTicksLimit: 6 },
+          grid:  { color: 'rgba(255,255,255,0.05)' },
+        },
+        y: {
+          ticks: { color: '#6e7681', font: { family: 'IBM Plex Mono', size: 10 }, maxTicksLimit: 5 },
+          grid:  { color: 'rgba(255,255,255,0.05)' },
+        }
+      }
+    }
+  });
+}
+
+function destroyCharts() {
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+}
+
+// ── Playback ──────────────────────────────────────────────────────────────
+function togglePlay() {
+  if (!simData) return;
+  isPlaying = !isPlaying;
+  document.getElementById('play-btn').textContent = isPlaying ? '⏸' : '▶';
+  if (isPlaying) {
+    const scrubber = document.getElementById('scrubber');
+    if (parseInt(scrubber.value) >= simData.tank_levels.length - 1) scrubber.value = 0;
+    playInterval = setInterval(() => {
+      const s = document.getElementById('scrubber');
+      const v = parseInt(s.value) + 5;
+      if (v >= simData.tank_levels.length) {
+        clearInterval(playInterval);
+        isPlaying = false;
+        document.getElementById('play-btn').textContent = '▶';
+        return;
+      }
+      s.value = v;
+      scrubTo(v);
+    }, 40);
+  } else {
+    clearInterval(playInterval);
+  }
+}
+
+function scrubTo(idx) {
+  if (!simData) return;
+  document.getElementById('step-label').textContent = `t = ${idx} / ${simData.tank_levels.length}`;
+  // Trim each chart to current step
+  const step = Math.max(1, Math.floor(simData.tank_levels.length / 500));
+  const datasets = [
+    { id: 'chart-tank',     src: simData.tank_levels },
+    { id: 'chart-pressure', src: simData.pressures },
+    { id: 'chart-demand',   src: simData.demands },
+    { id: 'chart-leak',     src: simData.leak_losses },
+  ];
+  datasets.forEach(({ id, src }) => {
+    const ch = charts[id];
+    if (!ch) return;
+    const labels = [], data = [];
+    for (let i = 0; i <= idx; i += step) { labels.push(i); data.push(src[i]); }
+    ch.data.labels = labels;
+    ch.data.datasets[0].data = data;
+    ch.update('none');
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+checkHealth();
+setInterval(checkHealth, 10000);
+</script>
+</body>
+</html>
